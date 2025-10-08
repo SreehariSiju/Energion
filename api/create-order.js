@@ -12,21 +12,20 @@ export default async function handler(req, res) {
 
     // Initialize Razorpay client with keys from environment variables
     const razorpay = new Razorpay({
-      key_id: process.env.VITE_RAZORPAY_KEY_ID,
+      // --- THE FIX IS HERE ---
+      // Use a regular backend environment variable (no VITE_ prefix)
+      key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
 
-    // --- THE FIX ---
-    // 1. Generate a short, unique ID (e.g., 'Uakgb_J5m9g-0JDM')
+    // Generate a short, unique ID (e.g., 'Uakgb_J5m9g-0JDM')
     const shortId = nanoid(14);
-    
-    // 2. Create a receipt string that is guaranteed to be under the 40-character limit
     const receiptId = `rcpt_${shortId}`;
 
     const options = {
       amount: amount * 100, // Amount in the smallest currency unit (paise)
       currency: "INR",
-      receipt: receiptId, // Use the new short and unique receipt ID
+      receipt: receiptId,
     };
 
     // Create the order on Razorpay's servers
@@ -46,3 +45,5 @@ export default async function handler(req, res) {
     res.status(500).json({ message: "Internal Server Error" });
   }
 }
+
+
