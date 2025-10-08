@@ -1,29 +1,6 @@
-// Import the necessary libraries
 import Razorpay from "razorpay";
-import admin from "firebase-admin";
+import { nanoid } from 'nanoid'; // Import the nanoid library
 
-// --- Securely Initialize Firebase Admin ---
-// This snippet securely initializes Firebase on the server.
-// It checks if the app is already initialized to prevent errors.
-// It reads the FIREBASE_SERVICE_ACCOUNT credentials from your Vercel environment variables.
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
-    });
-  } catch (error) {
-    console.error("Firebase admin initialization error", error.stack);
-  }
-}
-
-// --- Initialize Razorpay ---
-// It reads your secret keys from your Vercel environment variables.
-const razorpay = new Razorpay({
-  key_id: process.env.VITE_RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
-
-// This is the main serverless function
 export default async function handler(req, res) {
   // Only allow POST requests
   if (req.method !== 'POST') {
@@ -31,33 +8,41 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { amount, userId, planKwh } = req.body;
+    const { amount } = req.body;
 
-    // --- Validation ---
-    if (!amount || !userId) {
-      return res.status(400).json({ error: "Amount and userId are required." });
-    }
+    // Initialize Razorpay client with keys from environment variables
+    const razorpay = new Razorpay({
+      key_id: process.env.VITE_RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
 
-    // --- Create Razorpay Order ---
+    // --- THE FIX ---
+    // 1. Generate a short, unique ID (e.g., 'Uakgb_J5m9g-0JDM')
+    const shortId = nanoid(14);
+    
+    // 2. Create a receipt string that is guaranteed to be under the 40-character limit
+    const receiptId = `rcpt_${shortId}`;
+
     const options = {
-      amount: amount * 100, // Amount in the smallest currency unit (e.g., paisa for INR)
+      amount: amount * 100, // Amount in the smallest currency unit (paise)
       currency: "INR",
-      receipt: `receipt_${userId}_${Date.now()}`, // Create a unique receipt ID
-      notes: {
-        userId,
-        planKwh: planKwh || "PayAsYouGo", // Add notes for your reference
-      }
+      receipt: receiptId, // Use the new short and unique receipt ID
     };
 
+    // Create the order on Razorpay's servers
     const order = await razorpay.orders.create(options);
 
-    // --- Send Response ---
-    // Send the created order details back to the frontend app
+    if (!order) {
+      return res.status(500).json({ message: "Error creating order" });
+    }
+
+    // Send the created order details back to the client
     res.status(200).json(order);
 
   } catch (error) {
+    // Log the detailed error on the server for debugging
     console.error("Error creating Razorpay order:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    // Send a generic error message to the client
+    res.status(500).json({ message: "Internal Server Error" });
   }
 }
-
